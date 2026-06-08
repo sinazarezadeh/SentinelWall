@@ -99,11 +99,7 @@ pub struct ListArgs {
 
 // ─── Status ────────────────────────────────────────────────────────────────
 #[derive(Args, Debug)]
-pub struct StatusArgs {
-    /// Show verbose status
-    #[arg(short, long)]
-    pub verbose: bool,
-}
+pub struct StatusArgs {}
 
 // ─── Monitor ───────────────────────────────────────────────────────────────
 #[derive(Args, Debug)]

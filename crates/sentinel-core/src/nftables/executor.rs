@@ -195,10 +195,26 @@ impl NftablesManager {
             return Ok(None);
         }
 
-        let output = self.exec_nft_output(&format!("{} --echo --json", cmd)).await?;
+        // --echo and --json must be separate args, not appended to the command string.
+        // Passing them as part of cmd would embed them in the nft language → syntax error.
+        let output = Command::new(&self.nft_binary)
+            .arg("--echo")
+            .arg("--json")
+            .arg(cmd)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .context("Failed to execute nft")?;
 
-        // Parse JSON to find handle
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&output) {
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            error!("nft error: {}", stderr);
+            anyhow::bail!("nft command failed: {}", stderr);
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
             if let Some(handle) = json
                 .get("nftables")
                 .and_then(|n| n.as_array())

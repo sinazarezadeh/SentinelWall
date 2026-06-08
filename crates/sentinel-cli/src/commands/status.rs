@@ -4,7 +4,7 @@ use crate::client::Context;
 use crate::output;
 use super::StatusArgs;
 
-pub async fn run(ctx: Context, args: StatusArgs) -> Result<()> {
+pub async fn run(ctx: Context, _args: StatusArgs) -> Result<()> {
     let req = ctx.get("/api/v1/status");
     let response = ctx.send(req).await?;
 
@@ -34,14 +34,12 @@ pub async fn run(ctx: Context, args: StatusArgs) -> Result<()> {
     println!("  Threats:     {}", data.get("threats_today").and_then(|v| v.as_u64()).unwrap_or(0));
     println!();
 
-    if args.verbose {
-        let info_req = ctx.get("/api/v1/info");
-        if let Ok(info) = ctx.send(info_req).await {
+    let info_req = ctx.get("/api/v1/info");
+    if let Ok(info) = ctx.send(info_req).await {
+        if let Some(features) = info["features"].as_array() {
             println!("  Features:");
-            if let Some(features) = info["features"].as_array() {
-                for f in features {
-                    println!("    {} {}", "·".dimmed(), f.as_str().unwrap_or("").green());
-                }
+            for f in features {
+                println!("    {} {}", "·".dimmed(), f.as_str().unwrap_or("").green());
             }
             println!();
         }
