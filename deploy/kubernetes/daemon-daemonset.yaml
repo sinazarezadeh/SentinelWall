@@ -1,0 +1,207 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sentineld
+  namespace: sentinelwall
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sentineld
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sentineld
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: sentineld
+subjects:
+  - kind: ServiceAccount
+    name: sentineld
+    namespace: sentinelwall
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sentineld-config
+  namespace: sentinelwall
+data:
+  sentinelwall.toml: |
+    [core]
+    backend = "nftables"
+    state_file = "/var/lib/sentinelwall/state.db"
+    rules_dir = "/etc/sentinelwall/rules.d"
+
+    [network]
+    trusted_networks = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+
+    [detection]
+    brute_force_threshold = 5
+    brute_force_window_secs = 300
+    port_scan_threshold = 20
+    port_scan_window_secs = 60
+    flood_pps_threshold = 10000
+    max_connections_per_ip = 1000
+
+    [response]
+    auto_ban = true
+    ban_duration_secs = 3600
+    tarpit_enabled = false
+
+    [api]
+    bind = "0.0.0.0"
+    port = 8765
+
+    [logging]
+    level = "info"
+    format = "json"
+
+    [metrics]
+    enabled = true
+    bind = "0.0.0.0"
+    port = 9100
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sentineld
+  namespace: sentinelwall
+  labels:
+    app: sentineld
+    app.kubernetes.io/name: sentineld
+    app.kubernetes.io/component: daemon
+spec:
+  selector:
+    matchLabels:
+      app: sentineld
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: sentineld
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: sentineld
+      hostNetwork: true
+      hostPID: false
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+      priorityClassName: system-node-critical
+      containers:
+        - name: sentineld
+          image: ghcr.io/sinazarezadeh/sentineld:latest
+          imagePullPolicy: Always
+          args:
+            - --config
+            - /etc/sentinelwall/sentinelwall.toml
+          env:
+            - name: SENTINEL_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sentinelwall-secrets
+                  key: admin-password
+            - name: RUST_LOG
+              value: "info"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: api
+              containerPort: 8765
+              hostPort: 8765
+              protocol: TCP
+            - name: metrics
+              containerPort: 9100
+              hostPort: 9100
+              protocol: TCP
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: config
+              mountPath: /etc/sentinelwall
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/sentinelwall
+            - name: logs
+              mountPath: /var/log/sentinelwall
+            - name: run
+              mountPath: /run/sentinelwall
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8765
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8765
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: sentineld-config
+        - name: data
+          hostPath:
+            path: /var/lib/sentinelwall
+            type: DirectoryOrCreate
+        - name: logs
+          hostPath:
+            path: /var/log/sentinelwall
+            type: DirectoryOrCreate
+        - name: run
+          emptyDir:
+            medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentineld
+  namespace: sentinelwall
+  labels:
+    app: sentineld
+spec:
+  type: ClusterIP
+  selector:
+    app: sentineld
+  ports:
+    - name: api
+      port: 8765
+      targetPort: 8765
+    - name: metrics
+      port: 9100
+      targetPort: 9100

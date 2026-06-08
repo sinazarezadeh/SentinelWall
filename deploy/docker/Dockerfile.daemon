@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────
+#  SentinelWall Daemon — Production Docker Image
+# ─────────────────────────────────────────────────────
+FROM rust:1.75-bookworm AS builder
+
+WORKDIR /build
+
+# Cache dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY crates/sentinel-core/Cargo.toml crates/sentinel-core/
+COPY crates/sentinel-daemon/Cargo.toml crates/sentinel-daemon/
+COPY crates/sentinel-cli/Cargo.toml crates/sentinel-cli/
+COPY crates/sentinel-tui/Cargo.toml crates/sentinel-tui/
+
+# Dummy sources for dependency caching
+RUN mkdir -p crates/sentinel-core/src && echo "fn main() {}" > crates/sentinel-core/src/lib.rs
+RUN mkdir -p crates/sentinel-daemon/src && echo "fn main() {}" > crates/sentinel-daemon/src/main.rs
+RUN mkdir -p crates/sentinel-cli/src && echo "fn main() {}" > crates/sentinel-cli/src/main.rs
+RUN mkdir -p crates/sentinel-tui/src && echo "fn main() {}" > crates/sentinel-tui/src/main.rs
+
+RUN cargo build --release --bin sentineld --bin sentinel 2>/dev/null || true
+RUN find target/release -name "*.d" -delete
+
+# Real build
+COPY crates/ crates/
+RUN cargo build --release --bin sentineld --bin sentinel
+
+# ─────────────────────────────────────────────────────
+#  Runtime image
+# ─────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS runtime
+
+# Install nftables and runtime deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nftables \
+    iproute2 \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create sentinel user
+RUN groupadd -r sentinel && useradd -r -g sentinel -s /sbin/nologin sentinel
+
+# Create directories
+RUN install -d -o sentinel -g sentinel \
+    /etc/sentinelwall \
+    /var/lib/sentinelwall \
+    /var/log/sentinelwall
+
+# Copy binaries
+COPY --from=builder /build/target/release/sentineld /usr/local/bin/sentineld
+COPY --from=builder /build/target/release/sentinel /usr/local/bin/sentinel
+
+# Copy default config
+COPY configs/sentinelwall.toml /etc/sentinelwall/sentinelwall.toml.default
+
+# Capabilities for nftables without running as root
+RUN setcap 'cap_net_admin+eip' /usr/local/bin/sentineld
+
+EXPOSE 8765 9100
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD /usr/local/bin/sentinel status || exit 1
+
+USER sentinel
+
+CMD ["sentineld", "--config", "/etc/sentinelwall/sentinelwall.toml"]

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sentinelwall
+  labels:
+    app.kubernetes.io/name: sentinelwall
+    app.kubernetes.io/managed-by: kubectl

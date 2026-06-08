@@ -1,0 +1,82 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.local
+*.pyc
+
+# Node / Frontend
+node_modules/
+dist/
+.next/
+out/
+sentinel-web/dist/
+sentinel-web/.vite/
+*.local
+.npm
+.eslintcache
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Test artifacts
+coverage/
+.coverage
+htmlcov/
+*.lcov
+junit.xml
+
+# Build artifacts
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+docs/output/
+
+# Secrets — never commit these
+*.pem
+*.key
+*.crt
+*.p12
+.env
+.env.*
+!.env.example
+secrets.toml
+
+# SentinelWall runtime
+/var/
+*.db
+*.db-shm
+*.db-wal
+sentinel-ml/models/
+
+# Logs
+*.log
+logs/

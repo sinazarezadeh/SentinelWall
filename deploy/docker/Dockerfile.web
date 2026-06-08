@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────
+#  SentinelWall Web Dashboard — Production Docker Image
+# ─────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY sentinel-web/package*.json ./
+RUN npm ci --frozen-lockfile
+
+COPY sentinel-web/ .
+RUN npm run build
+
+# ─────────────────────────────────────────────────────
+#  Nginx runtime
+# ─────────────────────────────────────────────────────
+FROM nginx:1.25-alpine AS runtime
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY deploy/docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD wget -qO- http://localhost/health || exit 1

@@ -1,0 +1,47 @@
+[package]
+name = "sentinel-daemon"
+description = "SentinelWall daemon (sentineld) — REST API, WebSocket events, cluster sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "sentineld"
+path = "src/main.rs"
+
+[dependencies]
+sentinel-core = { path = "../sentinel-core" }
+tokio.workspace = true
+tokio-util.workspace = true
+axum.workspace = true
+axum-extra.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+dashmap.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+jsonwebtoken.workspace = true
+argon2.workspace = true
+rand.workspace = true
+sqlx.workspace = true
+prometheus.workspace = true
+config.workspace = true
+clap.workspace = true
+ipnet.workspace = true
+sha2.workspace = true
+hex.workspace = true
+futures = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
+axum-test = "14"

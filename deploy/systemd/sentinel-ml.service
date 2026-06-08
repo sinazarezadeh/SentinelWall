@@ -1,0 +1,24 @@
+[Unit]
+Description=SentinelWall ML Service
+Documentation=https://github.com/sinazarezadeh/SentinelWall
+After=network.target sentineld.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sentinel-ml --host 127.0.0.1 --port 8766
+Restart=on-failure
+RestartSec=10
+
+User=sentinel
+Group=sentinel
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/sentinelwall/models
+
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

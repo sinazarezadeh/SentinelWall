@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: sentinelwall
+
+scrape_configs:
+  - job_name: sentineld
+    static_configs:
+      - targets: ["localhost:9100"]
+    metrics_path: /metrics
+
+  - job_name: sentinel-ml
+    static_configs:
+      - targets: ["sentinel-ml:8766"]
+    metrics_path: /metrics
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

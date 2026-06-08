@@ -1,0 +1,205 @@
+# SentinelWall Configuration
+# Full reference: https://github.com/sinazarezadeh/SentinelWall/blob/main/docs/configuration.md
+
+[core]
+# Firewall backend: "nftables" (recommended) or "iptables"
+backend = "nftables"
+
+# Path to SQLite state database
+state_file = "/var/lib/sentinelwall/state.db"
+
+# Directory for custom rule files
+rules_dir = "/etc/sentinelwall/rules.d"
+
+# Directory for plugins
+plugins_dir = "/etc/sentinelwall/plugins"
+
+# Worker threads (0 = use number of CPU cores)
+worker_threads = 4
+
+# Active firewall profile: public, private, trusted, server, web, database, kubernetes, dmz, strict, minimal
+profile = "server"
+
+
+[network]
+# Networks that are always trusted and bypass threat detection
+trusted_networks = [
+    "127.0.0.0/8",
+    "::1/128",
+]
+
+# Two-letter ISO country codes to block (empty = no geo blocking)
+# blocked_countries = ["CN", "RU", "KP", "IR"]
+blocked_countries = []
+
+# DNS servers for reverse lookups
+dns_servers = ["1.1.1.1", "8.8.8.8"]
+
+
+[detection]
+# Brute-force detection
+brute_force_enabled = true
+brute_force_threshold = 5        # attempts before triggering
+brute_force_window_secs = 300    # rolling window
+brute_force_ban_duration = 3600  # initial ban (seconds)
+brute_force_escalation_multiplier = 2.0  # doubles with each re-offense
+
+# Port scan detection
+port_scan_enabled = true
+port_scan_threshold = 20         # unique ports per window
+port_scan_window_secs = 60
+port_scan_stealth_threshold_ms = 10  # < 10ms between probes = stealth scan
+
+# Flood detection
+flood_detection_enabled = true
+flood_syn_pps = 1000             # SYN packets/sec threshold
+flood_udp_pps = 5000
+flood_icmp_pps = 100
+flood_http_pps = 500
+
+# Connection limits
+max_connections_per_ip = 1000
+max_new_connections_per_sec = 100
+
+# Anomaly detection (statistical)
+anomaly_detection_enabled = true
+anomaly_z_score_threshold = 3.0  # standard deviations from baseline
+
+# ML-based detection
+ml_detection_enabled = true
+ml_service_url = "http://127.0.0.1:8766"
+ml_score_threshold = 0.65
+
+
+[response]
+# Automatically ban IPs that trigger high/critical threats
+auto_ban = true
+
+# Default ban duration in seconds (can be overridden per threat type)
+ban_duration_secs = 3600
+
+# Escalating ban: multiply duration for repeat offenders
+escalating_bans = true
+max_ban_multiplier = 32  # cap at 32x the base duration
+
+# Tarpit mode: accept connections but respond very slowly
+tarpit_enabled = false
+tarpit_delay_ms = 5000
+
+# Quarantine mode: isolate suspect IPs to a restrictive zone
+quarantine_enabled = false
+
+# Webhook for external notifications (Slack, PagerDuty, etc.)
+# notify_webhook = "https://hooks.slack.com/services/..."
+
+
+[api]
+# REST API listen address
+bind = "127.0.0.1"
+port = 8765
+
+# JWT signing secret — CHANGE THIS in production!
+# If empty, a random secret is generated on startup (tokens won't survive restart)
+jwt_secret = ""
+
+# Token expiry
+jwt_expiry_secs = 86400     # 24 hours
+refresh_expiry_secs = 604800  # 7 days
+
+# CORS allowed origins (for web dashboard)
+cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+
+# TLS (optional — recommended in production)
+# tls_cert = "/etc/sentinelwall/tls/cert.pem"
+# tls_key  = "/etc/sentinelwall/tls/key.pem"
+
+# Rate limit API requests
+api_rate_limit = 100  # requests per minute per IP
+
+
+[logging]
+# Log level: error, warn, info, debug, trace
+level = "info"
+
+# Log format: "pretty" (human-readable) or "json" (structured)
+format = "pretty"
+
+# Log file (empty = stdout only)
+# file = "/var/log/sentinelwall/sentineld.log"
+
+# Log rotation
+log_max_size_mb = 100
+log_max_backups = 10
+log_compress = true
+
+# Audit log (security events)
+audit_log_enabled = true
+# audit_log_file = "/var/log/sentinelwall/audit.log"
+
+
+[metrics]
+enabled = true
+bind = "127.0.0.1"
+port = 9100
+path = "/metrics"
+
+
+[geo]
+enabled = false
+# MaxMind GeoLite2 database (download from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)
+# db_path = "/var/lib/sentinelwall/GeoLite2-Country.mmdb"
+# db_path = "/var/lib/sentinelwall/GeoLite2-City.mmdb"
+
+
+[threat_intel]
+enabled = false
+
+# AbuseIPDB (https://www.abuseipdb.com/api)
+# abuseipdb_key = ""
+abuseipdb_confidence_threshold = 85
+
+# VirusTotal (https://www.virustotal.com/gui/my-apikey)
+# virustotal_key = ""
+
+# CrowdSec (https://www.crowdsec.net)
+# crowdsec_key = ""
+
+# TOR exit nodes (auto-updated)
+tor_exit_nodes_enabled = true
+tor_update_interval_secs = 3600
+
+# Custom block lists (URLs, one IP/CIDR per line)
+custom_blocklists = []
+
+
+[ml]
+enabled = false
+service_url = "http://127.0.0.1:8766"
+
+# Auto-retrain interval
+retrain_interval_secs = 86400
+
+# Minimum samples before training
+min_samples_for_training = 100
+
+# Model storage
+# model_dir = "/var/lib/sentinelwall/models"
+
+
+[cluster]
+enabled = false
+
+# This node's identifier
+# node_id = "node-1"
+
+# Peer nodes to sync with
+# peers = [
+#     "http://node2:8765",
+#     "http://node3:8765",
+# ]
+
+# Sync interval
+sync_interval_secs = 30
+
+# Shared secret for cluster auth
+# cluster_secret = ""

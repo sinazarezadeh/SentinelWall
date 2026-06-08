@@ -1,0 +1,91 @@
+version: "3.9"
+
+services:
+  sentineld:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.daemon
+    container_name: sentineld
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./config/sentinelwall.toml:/etc/sentinelwall/sentinelwall.toml:ro
+      - sentinel-data:/var/lib/sentinelwall
+      - sentinel-logs:/var/log/sentinelwall
+    environment:
+      - SENTINEL_ADMIN_PASSWORD=${SENTINEL_ADMIN_PASSWORD:-changeme123}
+      - RUST_LOG=${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "sentinel", "status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  sentinel-web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.web
+    container_name: sentinel-web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      sentineld:
+        condition: service_healthy
+    environment:
+      - VITE_API_URL=http://sentineld:8765/api/v1
+
+  sentinel-ml:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.ml
+    container_name: sentinel-ml
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8766:8766"
+    volumes:
+      - sentinel-models:/var/lib/sentinelwall/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8766/health').raise_for_status()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:v2.49.0
+    container_name: sentinel-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: sentinel-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+
+volumes:
+  sentinel-data:
+  sentinel-logs:
+  sentinel-models:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,228 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel-web
+  namespace: sentinelwall
+  labels:
+    app: sentinel-web
+    app.kubernetes.io/name: sentinel-web
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sentinel-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: sentinel-web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        fsGroup: 101
+      containers:
+        - name: sentinel-web
+          image: ghcr.io/sinazarezadeh/sentinel-web:latest
+          imagePullPolicy: Always
+          env:
+            - name: VITE_API_URL
+              value: "/api/v1"
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: nginx-tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: nginx-tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel-web
+  namespace: sentinelwall
+  labels:
+    app: sentinel-web
+spec:
+  type: ClusterIP
+  selector:
+    app: sentinel-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sentinelwall
+  namespace: sentinelwall
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sentinelwall.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: sentineld
+                port:
+                  number: 8765
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sentinel-web
+                port:
+                  number: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel-ml
+  namespace: sentinelwall
+  labels:
+    app: sentinel-ml
+    app.kubernetes.io/name: sentinel-ml
+    app.kubernetes.io/component: ml
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sentinel-ml
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: sentinel-ml
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8766"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: sentinel-ml
+          image: ghcr.io/sinazarezadeh/sentinel-ml:latest
+          imagePullPolicy: Always
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 8766
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: models
+              mountPath: /var/lib/sentinelwall/models
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8766
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8766
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: sentinel-models
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sentinel-models
+  namespace: sentinelwall
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel-ml
+  namespace: sentinelwall
+  labels:
+    app: sentinel-ml
+spec:
+  type: ClusterIP
+  selector:
+    app: sentinel-ml
+  ports:
+    - name: http
+      port: 8766
+      targetPort: 8766
